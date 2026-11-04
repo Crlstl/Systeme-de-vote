@@ -1,0 +1,119 @@
+#!/bin/bash
+
+VOTES="data/votes.txt"
+REPS="data/reponses.txt"
+ME="$USER"
+ 
+newvote() {
+    read -r -p "Nom du vote : " nom
+    read -r -p "Question : " question
+    read -r -p "Propositions (séparées par ;) : " props
+    read -r -p "Choix multiple ? (o/n) : " multi
+    read -r -p "Date de fin (AAAA-MM-JJ) : " fin
+ 
+    # Tous les champs sont obligatoires
+    if [ -z "$nom" ] || [ -z "$question" ] || [ -z "$props" ] || [ -z "$fin" ]; then
+        echo "Erreur : tous les champs sont obligatoires."
+        return 1
+    fi
+ 
+    # Le nom doit être unique
+    if grep -q "^[0-9]*;$nom;" "$VOTES"; then
+        echo "Erreur : un vote nommé '$nom' existe déjà."
+        return 1
+    fi
+ 
+    # Type de vote
+    if [ "$multi" = "o" ]; then
+        type="multiple"
+    else
+        type="simple"
+    fi
+ 
+    # Les propositions sont stockées séparées par |, je remplace ; --> |
+    props=$(echo "$props" | tr ';' '|')
+ 
+    # Nouvel id = plus grand id + 1
+    id=$(awk -F';' 'BEGIN{m=0} $1>m {m=$1} END{print m+1}' "$VOTES")
+	#ME= c'est moi (l'auteur)
+    echo "$id;$nom;$ME;$question;$props;$type;$(date +%F);$fin;ouvert" >> "$VOTES"
+    echo "Vote créé : id=$id"
+}
+
+
+catvote()    {
+	if [ -z "$1" ];then
+		echo "Erreur : Precisez l'argument."
+        return 1
+	fi 
+	nomOUid=$1
+	ligne=$(awk -F';' -v nomID="$nomOUid" '{
+		if(nomID == $1 || nomID == $2){print $4;
+			#il faut decouper le champ des propositions grace à split							
+			taille = split($5,contenu,"|");
+			for(i = 0; i<=taille; i++){print contenu[i];}
+			}}' "$VOTES")
+	echo "$ligne"
+}
+lsvote()  {
+    if [ -z "$1" ];then
+		echo "Erreur : Precisez l'argument."
+        return 1
+	fi
+    userOUmotifNQ=$1
+    ligne=$(
+        awk -F';' -v UorPNQ="$userOUmotifNQ" '{
+        if (UorPNQ == $3 || $2 ~ UorPNQ || $4 ~ UorPNQ){ print $1; } #je print le id pour afficher apres avec un catvote la question
+        }' "$VOTES"
+    )
+    if [ -z "$ligne" ]; then 
+        echo "Aucun mot ou motif corespondant"
+        return 1
+    else 
+        for id in $ligne
+        do 
+            catvote "$id"
+        done 
+    fi 
+
+}
+repvote()    { echo "repvote $* : pas encore fait"; }
+resultvote() { echo "resultvote $1 : pas encore fait"; }
+closevote()  {
+	if [ -z "$1" ];then
+		echo "Erreur : Precisez l'argument."
+        return 1
+	fi 
+	nomOUid=$1
+	dateactuel=$(date +%Y-%m-%d) #la date au format AAAA-MM-JJ
+	awk -F';' -v OFS=';' -v nomID="$nomOUid" -v dateAC="$dateactuel" -v user="$ME" '{ 
+        if( (nomID == $1 || nomID == $2) ) {
+            if( user == $3 ){
+                $8 = dateAC; $9 = "fermé";
+            } 
+            else{
+                print "erreur vous netes pas le createur du vote, vous ne pouvez pas le fermer" > "/dev/stderr"
+            }
+        }
+        print;
+    }' "$VOTES" > fichiertempo.txt
+	#le -F definit les séparateurs, -v OFS les séparateur a remttre apres le changement des argument, puis la reprise de variable du shell en awk
+	mv fichiertempo.txt "$VOTES"
+	#IL FAUDRAIT RENVOYER DES MESSAGES A L'UTILISATEUR POUR SAVORI CE QUI N'A PAS MARCHÉ ET SI CA MARCHE DIRE QUE CA A MARCHÉ ET AINSI EVITER DE REMPLACER PAR UN FICHIER VIDE
+    #pour la partie statistique mettre des schéma et quelquechose d'un petit peu plus avancer mais tjr awk et shell
+}
+ 
+while read -r -p "vote> " cmd args; do
+    set -- $args
+    case "$cmd" in
+        newvote)    newvote ;;
+        catvote)    catvote "$@" ;;
+        repvote)    repvote "$@" ;;
+        resultvote) resultvote "$@" ;;
+        lsvote)     lsvote "$@" ;; 
+		closevote)  closevote "$@" ;;
+        quit)       break ;;
+        "")         ;;
+        *)          echo "Commande inconnue : $cmd" ;;
+    esac
+done

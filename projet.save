@@ -1,0 +1,55 @@
+#!/bin/bash
+VOTES="data/votes.txt"
+REPS="data/reponses.txt"
+ME="$USER"
+ 
+newvote() {
+    read -r -p "Nom du vote : " nom
+    read -r -p "Question : " question
+    read -r -p "Propositions (séparées par ;) : " props
+    read -r -p "Choix multiple ? (o/n) : " multi
+    read -r -p "Date de fin (AAAA-MM-JJ) : " fin
+
+    # Tous les champs sont obligatoires
+    if [ -z "$nom" ] || [ -z "$question" ] || [ -z "$props" ] || [ -z "$fin" ]; then
+        echo "Erreur : tous les champs sont obligatoires."
+        return 1
+    fi
+ 
+    # Le nom doit être unique
+    if grep -q "^[0-9]*;$nom;" "$VOTES"; then
+        echo "Erreur : un vote nommé '$nom' existe déjà."
+        return 1
+    fi
+    # Type de vote
+    if [ "$multi" = "o" ]; then
+        type="multiple"
+    else
+        type="simple"
+    fi
+ 
+    # Les propositions sont stockées séparées par |, je remplace ; --> |
+    props=$(echo "$props" | tr ';' '|')
+ 
+    # Nouvel id = plus grand id + 1
+    id=$(awk -F';' 'BEGIN{m=0} $1>m {m=$1} END{print m+1}' "$VOTES")
+#ME= c'est moi (l'auteur)
+    echo "$id;$nom;$ME;$question;$props;$type;$(date +%F);$fin;ouvert" >> "$VOTES"
+    echo "Vote créé : id=$id"
+}
+catvote()    { echo "catvote $1 : pas encore fait"; }
+repvote()    { echo "repvote $* : pas encore fait"; }
+resultvote() { echo "resultvote $1 : pas encore fait"; }
+ 
+while read -r -p "vote> " cmd args; do
+    set -- $args
+    case "$cmd" in
+        newvote)    newvote ;;
+        catvote)    catvote "$@" ;;
+        repvote)    repvote "$@" ;;
+        resultvote) resultvote "$@" ;;
+        quit)       break ;;
+        "")         ;;
+        *)          echo "Commande inconnue : $cmd" ;;
+    esac
+done
